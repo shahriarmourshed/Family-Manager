@@ -58,7 +58,7 @@ export default function ProfilePage() {
   const { toast } = useToast();
   const [newExpenseCategoryName, setNewExpenseCategoryName] = useState('');
   const [newIncomeCategoryName, setNewIncomeCategoryName] = useState('');
-  const [notificationPermission, setNotificationPermission] = useState<PermissionState | NotificationPermission>('prompt');
+  const [notificationPermission, setNotificationPermission] = useState<PermissionState | NotificationPermission | string>('prompt');
 
   useEffect(() => {
     // This effect runs only on the client.
@@ -68,11 +68,16 @@ export default function ProfilePage() {
         setNotificationPermission(status.receive);
       } else if (typeof window !== 'undefined' && 'Notification' in window) {
         if ('permissions' in navigator) {
-          const permissionStatus = await navigator.permissions.query({ name: 'notifications' });
-          setNotificationPermission(permissionStatus.state);
-          permissionStatus.onchange = () => {
+          try {
+            const permissionStatus = await navigator.permissions.query({ name: 'notifications' });
             setNotificationPermission(permissionStatus.state);
-          };
+            permissionStatus.onchange = () => {
+              setNotificationPermission(permissionStatus.state);
+            };
+          } catch (error) {
+             console.error("Error querying notification permissions:", error);
+             setNotificationPermission(Notification.permission);
+          }
         } else {
           setNotificationPermission(Notification.permission);
         }
@@ -295,7 +300,7 @@ export default function ProfilePage() {
                 <div>
                     <p className="font-medium">Push Notification Permission</p>
                     <p className="text-sm text-muted-foreground">
-                        Status: <span className="font-semibold capitalize">{notificationPermission}</span>
+                        Status: <span className="font-semibold capitalize">{String(notificationPermission)}</span>
                     </p>
                 </div>
                 <Button 
@@ -581,5 +586,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-
-    
