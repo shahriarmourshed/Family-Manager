@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -38,7 +37,7 @@ import { requestForToken } from '@/lib/firebase';
 import type { NotificationSettings } from '@/lib/types';
 import { Switch } from '@/components/ui/switch';
 import { Capacitor } from '@capacitor/core';
-import { PushNotifications } from '@capacitor/push-notifications';
+import { PushNotifications, PermissionState } from '@capacitor/push-notifications';
 import { LocalNotifications } from '@capacitor/local-notifications';
 
 export default function ProfilePage() {
@@ -59,26 +58,28 @@ export default function ProfilePage() {
   const { toast } = useToast();
   const [newExpenseCategoryName, setNewExpenseCategoryName] = useState('');
   const [newIncomeCategoryName, setNewIncomeCategoryName] = useState('');
-  const [notificationPermission, setNotificationPermission] = useState('default');
+  const [notificationPermission, setNotificationPermission] = useState<PermissionState | NotificationPermission>('prompt');
 
   useEffect(() => {
-    // This code runs only on the client, after the component has mounted.
-    if (Capacitor.isNativePlatform()) {
-      PushNotifications.checkPermissions().then(status => {
+    // This effect runs only on the client.
+    const checkPermissions = async () => {
+      if (Capacitor.isNativePlatform()) {
+        const status = await PushNotifications.checkPermissions();
         setNotificationPermission(status.receive);
-      });
-    } else if (typeof window !== 'undefined' && 'Notification' in window) {
-      if ('permissions' in navigator) {
-        navigator.permissions.query({name: 'notifications'}).then(permissionStatus => {
+      } else if (typeof window !== 'undefined' && 'Notification' in window) {
+        if ('permissions' in navigator) {
+          const permissionStatus = await navigator.permissions.query({ name: 'notifications' });
           setNotificationPermission(permissionStatus.state);
           permissionStatus.onchange = () => {
             setNotificationPermission(permissionStatus.state);
           };
-        });
-      } else {
-         setNotificationPermission(Notification.permission);
+        } else {
+          setNotificationPermission(Notification.permission);
+        }
       }
-    }
+    };
+
+    checkPermissions();
   }, []);
 
   const handleLogout = async () => {
@@ -146,34 +147,6 @@ export default function ProfilePage() {
     })
   }
 
-  const registerNativeNotifications = async () => {
-    let permStatus = await PushNotifications.checkPermissions();
-
-    if (permStatus.receive === 'prompt') {
-      permStatus = await PushNotifications.requestPermissions();
-    }
-    
-    if (permStatus.receive !== 'granted') {
-      throw new Error('User denied permissions!');
-    }
-
-    await PushNotifications.register();
-  }
-
-  const getFCMToken = async () => {
-    return new Promise((resolve, reject) => {
-      PushNotifications.addListener('registration', (token) => {
-        console.log('Push registration success, token: ' + token.value);
-        resolve(token.value);
-      });
-
-      PushNotifications.addListener('registrationError', (error) => {
-        console.error('Error on registration: ' + JSON.stringify(error));
-        reject(error);
-      });
-    });
-  }
-
   const handleNotificationPermission = async () => {
     if (notificationPermission === 'granted') {
       toast({
@@ -185,8 +158,29 @@ export default function ProfilePage() {
     let token: string | null = null;
     try {
       if (Capacitor.isNativePlatform()) {
-        await registerNativeNotifications();
-        token = await getFCMToken() as string;
+        let permStatus = await PushNotifications.checkPermissions();
+        if (permStatus.receive === 'prompt' || permStatus.receive === 'prompt-with-rationale') {
+          permStatus = await PushNotifications.requestPermissions();
+        }
+        
+        if (permStatus.receive !== 'granted') {
+          throw new Error('User denied push notification permissions!');
+        }
+
+        await PushNotifications.register();
+        
+        token = await new Promise<string>((resolve, reject) => {
+          PushNotifications.addListener('registration', (token) => {
+            console.log('Push registration success, token: ' + token.value);
+            resolve(token.value);
+          });
+
+          PushNotifications.addListener('registrationError', (error) => {
+            console.error('Error on registration: ' + JSON.stringify(error));
+            reject(error);
+          });
+        });
+
       } else {
         token = await requestForToken();
       }
@@ -199,13 +193,13 @@ export default function ProfilePage() {
           });
           setNotificationPermission('granted');
       } else {
-          throw new Error("Could not get notification token.");
+          throw new Error("Could not get notification token. Permission might be denied.");
       }
-    } catch (err) {
+    } catch (err: any) {
         toast({
             variant: 'destructive',
             title: "Notifications Blocked",
-            description: "Permission was not granted. Please enable notifications in your app or system settings.",
+            description: err.message || "Permission was not granted. Please enable notifications in your app or system settings.",
         })
     }
   }
@@ -237,18 +231,10 @@ export default function ProfilePage() {
   
   const handleTestLocalNotification = async () => {
     try {
-      let permissions = await LocalNotifications.checkPermissions();
-      if (permissions.display !== 'granted') {
-        permissions = await LocalNotifications.requestPermissions();
-      }
-
-      if (permissions.display !== 'granted') {
-        toast({
-          variant: 'destructive',
-          title: 'Permission Denied',
-          description: 'Cannot schedule local notification without permission.',
-        });
-        return;
+      if (!(await LocalNotifications.checkPermissions()).display === 'granted') {
+        if ((await LocalNotifications.requestPermissions()).display !== 'granted') {
+          throw new Error('Local notification permission denied.');
+        }
       }
 
       await LocalNotifications.schedule({
@@ -270,12 +256,12 @@ export default function ProfilePage() {
         title: 'Notification Scheduled',
         description: 'You should receive a local notification in 5 seconds.',
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error scheduling local notification', error);
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'Could not schedule local notification.',
+        description: error.message || 'Could not schedule local notification.',
       });
     }
   };
@@ -595,3 +581,5 @@ export default function ProfilePage() {
     </div>
   );
 }
+
+    

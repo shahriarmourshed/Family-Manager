@@ -9,7 +9,6 @@ const withPWA = withPWAInit({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   /* config options here */
-  output: 'export',
   typescript: {
     ignoreBuildErrors: true,
   },
@@ -42,3 +41,5 @@ const nextConfig = {
 };
 
 module.exports = withPWA(nextConfig);
+
+    
