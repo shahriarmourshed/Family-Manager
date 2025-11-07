@@ -39,6 +39,7 @@ import type { NotificationSettings } from '@/lib/types';
 import { Switch } from '@/components/ui/switch';
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
+import { LocalNotifications } from '@capacitor/local-notifications';
 
 export default function ProfilePage() {
   const { 
@@ -234,6 +235,52 @@ export default function ProfilePage() {
       setNotificationSettings(newSettings);
   };
   
+  const handleTestLocalNotification = async () => {
+    try {
+      let permissions = await LocalNotifications.checkPermissions();
+      if (permissions.display !== 'granted') {
+        permissions = await LocalNotifications.requestPermissions();
+      }
+
+      if (permissions.display !== 'granted') {
+        toast({
+          variant: 'destructive',
+          title: 'Permission Denied',
+          description: 'Cannot schedule local notification without permission.',
+        });
+        return;
+      }
+
+      await LocalNotifications.schedule({
+        notifications: [
+          {
+            title: 'Test Notification',
+            body: 'If you see this, local notifications are working!',
+            id: new Date().getTime(),
+            schedule: { at: new Date(Date.now() + 5000) }, // 5 seconds from now
+            sound: undefined,
+            attachments: undefined,
+            actionTypeId: '',
+            extra: null,
+          },
+        ],
+      });
+
+      toast({
+        title: 'Notification Scheduled',
+        description: 'You should receive a local notification in 5 seconds.',
+      });
+    } catch (error) {
+      console.error('Error scheduling local notification', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Could not schedule local notification.',
+      });
+    }
+  };
+
+
   return (
     <div className="container mx-auto">
       <PageHeader title="Settings" subtitle="Manage your application settings." />
@@ -274,6 +321,17 @@ export default function ProfilePage() {
                     {notificationPermission === 'granted' ? 'Enabled' : 'Enable'}
                 </Button>
             </div>
+
+            {Capacitor.isNativePlatform() && (
+              <Button
+                variant="outline"
+                onClick={handleTestLocalNotification}
+                className="w-full"
+              >
+                <Bell className="mr-2 h-4 w-4" />
+                Test Local Notification
+              </Button>
+            )}
             
             <div className="space-y-4 pt-4">
               <Separator />
