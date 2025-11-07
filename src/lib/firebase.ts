@@ -3,16 +3,17 @@ import { initializeApp, getApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore, enableIndexedDbPersistence, initializeFirestore } from "firebase/firestore";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
-import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
+import { initializeAppCheck, ReCaptchaV3Provider } from "@firebase/app-check";
 
 
 const firebaseConfig = {
   apiKey: "AIzaSyAOnRgf3OSlJ4F516dmtoylNZpVi1ofSLA",
   authDomain: "familyverse-5xnxn.firebaseapp.com",
+  databaseURL: "https://familyverse-5xnxn-default-rtdb.firebaseio.com",
   projectId: "familyverse-5xnxn",
   storageBucket: "familyverse-5xnxn.firebasestorage.app",
   messagingSenderId: "314321317316",
-  appId: "1:314321317316:web:4077473d0083408bb68891",
+  appId: "1:314321317316:web:abb25ed31233fb4cb68891"
 };
 
 // Initialize Firebase
