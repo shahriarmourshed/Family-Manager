@@ -45,12 +45,12 @@ if (typeof window !== "undefined") {
 }
 
 export const requestForToken = async () => {
-  if (!messaging) return null;
+  if (!messaging || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return null;
   
   try {
     const permission = await Notification.requestPermission();
     if (permission === 'granted') {
-      const serviceWorkerRegistration = await navigator.serviceWorker.ready;
+      const serviceWorkerRegistration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
       const currentToken = await getToken(messaging, { 
           vapidKey: 'BBiqGgVOrDqA3mUjA_FmUnA-Fk-SSUi_yDkS-yGqH4t-6Lp3-zFpL5vX1f8mJ1hZ1g9wYjX2jV3k4eI',
           serviceWorkerRegistration 
