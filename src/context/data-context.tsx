@@ -102,7 +102,6 @@ interface DataContextType {
   clearAllUserData: () => Promise<void>;
   clearMonthData: (year: number, month: number) => Promise<void>;
   loading: boolean;
-  reminderDays: number;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -202,8 +201,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     
     const settingsUnsub = onSnapshot(doc(db, 'users', userId, 'settings', 'main'), (doc) => {
         if(doc.exists()) {
-            const remoteSettings = doc.data() as Partial<UserSettings & {reminderDays: number}>;
-            // Merge with defaults to ensure all fields are present, especially new ones.
+            const remoteSettings = doc.data() as Partial<UserSettings>;
             setSettings(prevSettings => {
                  const newSettings = {
                     ...DEFAULT_SETTINGS,
@@ -230,11 +228,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
                         }
                     }
                 };
-
-                // Migrate legacy reminderDays if it exists
-                if (remoteSettings.reminderDays && !remoteSettings.notificationSettings?.transactions?.reminderDays) {
-                    newSettings.notificationSettings.transactions.reminderDays = remoteSettings.reminderDays;
-                }
                 
                 return newSettings;
             });
@@ -441,7 +434,6 @@ export function DataProvider({ children }: { children: ReactNode }) {
     completePlannedTransaction, 
     cancelPlannedTransaction,
     loading,
-    reminderDays: settings?.notificationSettings?.transactions?.reminderDays ?? 3,
   };
 
   return (
@@ -458,5 +450,3 @@ export function useData() {
   }
   return context;
 }
-
-    

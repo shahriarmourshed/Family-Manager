@@ -103,7 +103,6 @@ export type NotificationSettings = {
 
 export type UserSettings = {
   savingGoal: number;
-  reminderDays: number; // Legacy, will be deprecated
   notificationSettings: NotificationSettings;
   fcmTokens: string[];
 };

@@ -1,7 +1,7 @@
 
 import { NextResponse } from 'next/server';
 import type { UserSettings, Income, Expense, Product, FamilyMember } from '@/lib/types';
-import { differenceInDays, parseISO, setYear as setYearDate, isFuture } from 'date-fns';
+import { differenceInDays, parseISO, setYear as setYearDate, isFuture, format } from 'date-fns';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,11 +19,11 @@ export async function GET(request: Request) {
 
   try {
     const now = new Date();
-    const currentHour = now.getUTCHours();
-    const currentMinute = now.getUTCMinutes();
-    const currentTime = `${String(currentHour).padStart(2, '0')}:${String(currentMinute).padStart(2, '0')}`;
+    // Use a specific timezone for consistency if needed, e.g., 'UTC'
+    // For local time of server:
+    const currentTime = format(now, 'HH:mm');
 
-    console.log(`Cron job running at UTC: ${currentTime}`);
+    console.log(`Cron job running at server time: ${currentTime}`);
 
     const usersSnapshot = await adminDb.collection('users').get();
 
@@ -37,7 +37,7 @@ export async function GET(request: Request) {
       
       try {
         const response = await getMessaging().sendMulticast(message);
-        console.log('Successfully sent message:', response);
+        console.log(`Successfully sent ${response.successCount} messages`);
         if (response.failureCount > 0) {
             const failedTokens: string[] = [];
             response.responses.forEach((resp, idx) => {
@@ -46,6 +46,7 @@ export async function GET(request: Request) {
                 }
             });
             console.log('List of tokens that caused failures:', failedTokens);
+            // Optionally, implement logic to remove invalid tokens from user settings
         }
       } catch (error) {
         console.error('Error sending message:', error);
@@ -88,7 +89,7 @@ export async function GET(request: Request) {
         const daysBefore = events.daysBefore || 1;
         const upcomingEvents = await getUpcomingEvents(userId, daysBefore);
         if (upcomingEvents.length > 0) {
-          const body = `You have ${upcomingEvents.length} upcoming family event(s) in the next ${daysBefore} days.`;
+          const body = `You have ${upcomingEvents.length} upcoming family event(s) in the next ${daysBefore === 1 ? 'day' : `${daysBefore} days`}.`;
           await sendNotification(settings.fcmTokens, "Upcoming Family Events", body);
         }
       }
@@ -118,8 +119,13 @@ async function getUpcomingTransactions(userId: string, reminderDays: number): Pr
     ];
     
     const upcoming = allTransactions.filter(t => {
-        const transactionDate = new Date(t.date);
-        return isFuture(transactionDate) && differenceInDays(transactionDate, today) <= reminderDays;
+        try {
+            const transactionDate = parseISO(t.date);
+            return isFuture(transactionDate) && differenceInDays(transactionDate, today) <= reminderDays;
+        } catch (e) {
+            console.error(`Invalid date format for transaction ${t.id}: ${t.date}`);
+            return false;
+        }
     });
 
     return upcoming;
@@ -148,9 +154,9 @@ async function getUpcomingEvents(userId: string, daysBefore: number): Promise<an
             if (!dateStr) return;
             try {
                 const eventDate = parseISO(dateStr);
-                const nextEvent = setYearDate(eventDate, currentYear);
+                let nextEvent = setYearDate(eventDate, currentYear);
                 if (nextEvent < today) {
-                    nextEvent.setFullYear(currentYear + 1);
+                    nextEvent = setYearDate(eventDate, currentYear + 1);
                 }
                 const daysLeft = differenceInDays(nextEvent, today);
                 if (daysLeft >= 0 && daysLeft <= daysBefore) {
@@ -162,7 +168,7 @@ async function getUpcomingEvents(userId: string, daysBefore: number): Promise<an
                     });
                 }
             } catch (e) {
-                console.error(`Invalid date for ${eventName} for member ${member.name}`);
+                console.error(`Invalid date for ${eventName} for member ${member.name}: ${dateStr}`);
             }
         };
 
@@ -174,5 +180,3 @@ async function getUpcomingEvents(userId: string, daysBefore: number): Promise<an
 
     return events.sort((a, b) => a.daysLeft - b.daysLeft);
 }
-
-    
