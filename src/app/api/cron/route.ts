@@ -3,56 +3,51 @@ import { NextResponse } from 'next/server';
 import type { UserSettings, Income, Expense, Product, FamilyMember } from '@/lib/types';
 import { differenceInDays, parseISO, setYear as setYearDate, isFuture, format } from 'date-fns';
 import { headers } from 'next/headers';
-import { adminDb, adminAuth, adminMessaging } from '@/lib/firebase-admin';
+import { adminDb, adminAuth, adminMessaging, admin } from '@/lib/firebase-admin';
 import type { firestore } from 'firebase-admin';
 
 export const dynamic = 'force-dynamic';
 
 // This function can be triggered by a cron job service.
 export async function GET(request: Request) {
-  if (!adminDb || !adminAuth || !adminMessaging) {
-      console.error("Firebase Admin SDK not initialized. Check server logs for initialization errors.");
-      return new NextResponse(JSON.stringify({ message: 'Server configuration error.' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
-  }
-  
-  const headersList = headers();
-  const triggerType = headersList.get('X-Trigger-Type');
-  const cronSecret = headersList.get('authorization')?.split('Bearer ')[1];
-  
-  let userIdToProcess: string | null = null;
-  
-  if (triggerType === 'manual') {
-    const idToken = headersList.get('authorization')?.split('Bearer ')[1];
-    if (!idToken) {
-        return new NextResponse(JSON.stringify({ message: 'Missing Firebase ID token.' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
-    }
-    try {
-        const decodedToken = await adminAuth.verifyIdToken(idToken);
-        userIdToProcess = decodedToken.uid;
-        console.log(`Manual trigger for user: ${userIdToProcess}`);
-    } catch (error) {
-        console.error('Error verifying Firebase ID token:', error);
-        return new NextResponse(JSON.stringify({ message: 'Invalid Firebase ID token.' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
-    }
-  } else {
-    // This is for the scheduled cron job
-    // IMPORTANT: You need to set the CRON_SECRET environment variable in your hosting provider for this to work in production.
-    if (!process.env.CRON_SECRET || cronSecret !== process.env.CRON_SECRET) {
-      console.warn('Unauthorized cron job attempt.');
-      return new NextResponse('Unauthorized', { status: 401 });
-    }
-    console.log('Scheduled cron job running...');
-  }
-
-
   try {
+    // This check will now throw a specific error if initialization failed.
+    if (!adminDb || !adminAuth || !adminMessaging) {
+      // This will catch the detailed error from firebase-admin.ts
+      throw new Error('Firebase Admin SDK is not available. Check server logs for initialization errors.');
+    }
+    
+    const headersList = headers();
+    const triggerType = headersList.get('X-Trigger-Type');
+    const cronSecret = headersList.get('authorization')?.split('Bearer ')[1];
+    
+    let userIdToProcess: string | null = null;
+    
+    if (triggerType === 'manual') {
+      const idToken = headersList.get('authorization')?.split('Bearer ')[1];
+      if (!idToken) {
+          return new NextResponse(JSON.stringify({ message: 'Missing Firebase ID token.' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+      }
+      const decodedToken = await adminAuth.verifyIdToken(idToken);
+      userIdToProcess = decodedToken.uid;
+      console.log(`Manual trigger for user: ${userIdToProcess}`);
+
+    } else {
+      // This is for the scheduled cron job
+      if (!process.env.CRON_SECRET || cronSecret !== process.env.CRON_SECRET) {
+        console.warn('Unauthorized cron job attempt.');
+        return new NextResponse('Unauthorized', { status: 401 });
+      }
+      console.log('Scheduled cron job running...');
+    }
+
     const now = new Date();
     const currentTime = format(now, 'HH:mm');
     console.log(`Cron job running at server time: ${currentTime}`);
     
     let usersQuery: firestore.Query<firestore.DocumentData>;
     if (userIdToProcess) {
-        usersQuery = adminDb.collection('users').where(firestore.FieldPath.documentId(), '==', userIdToProcess);
+        usersQuery = adminDb.collection('users').where(admin.firestore.FieldPath.documentId(), '==', userIdToProcess);
     } else {
         usersQuery = adminDb.collection('users');
     }
@@ -136,10 +131,11 @@ export async function GET(request: Request) {
         : 'Scheduled cron job executed successfully.';
 
     return NextResponse.json({ success: true, message });
-  } catch (error) {
-    console.error("Error in cron job:", error);
-    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-    return new NextResponse(JSON.stringify({ message: errorMessage }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+
+  } catch (error: any) {
+    console.error("Error in cron job API route:", error);
+    const errorMessage = error.message || 'An unknown error occurred';
+    return new NextResponse(JSON.stringify({ message: `API Route Error: ${errorMessage}` }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 }
 
