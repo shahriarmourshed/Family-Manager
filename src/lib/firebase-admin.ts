@@ -2,11 +2,12 @@
 import * as admin from 'firebase-admin';
 import serviceAccount from '../../firebase-service-account.json';
 
-let adminApp: admin.app | null = null;
-let adminInitializationError: Error | null = null;
+let adminApp: admin.app;
 
-if (!admin.apps.length) {
-  try {
+try {
+  if (admin.apps.length > 0) {
+    adminApp = admin.app();
+  } else {
     // Check if the service account has been filled out.
     if (serviceAccount.project_id === 'your-project-id') {
       throw new Error(
@@ -16,25 +17,14 @@ if (!admin.apps.length) {
     adminApp = admin.initializeApp({
       credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
     });
-  } catch (e: any) {
-    console.error("Firebase Admin initialization error:", e);
-    adminInitializationError = e;
   }
-} else {
-  adminApp = admin.apps[0];
+} catch (e: any) {
+  // Re-throwing the error is crucial so that the API route can catch it and report it.
+  console.error("CRITICAL: Firebase Admin initialization failed.", e.message);
+  throw new Error(`Firebase Admin initialization failed: ${e.message}`);
 }
 
-function getAdminSDK() {
-  if (adminInitializationError) {
-    throw adminInitializationError;
-  }
-  if (!adminApp) {
-    throw new Error("Firebase Admin SDK is not initialized.");
-  }
-  return adminApp;
-}
-
-export const adminDb = adminApp ? getAdminSDK().firestore() : null;
-export const adminAuth = adminApp ? getAdminSDK().auth() : null;
-export const adminMessaging = adminApp ? getAdminSDK().messaging() : null;
+export const adminDb = adminApp.firestore();
+export const adminAuth = adminApp.auth();
+export const adminMessaging = adminApp.messaging();
 export { admin };

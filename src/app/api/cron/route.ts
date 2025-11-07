@@ -11,12 +11,6 @@ export const dynamic = 'force-dynamic';
 // This function can be triggered by a cron job service.
 export async function GET(request: Request) {
   try {
-    // This check will now throw a specific error if initialization failed.
-    if (!adminDb || !adminAuth || !adminMessaging) {
-      // This will catch the detailed error from firebase-admin.ts
-      throw new Error('Firebase Admin SDK is not available. Check server logs for initialization errors.');
-    }
-    
     const headersList = headers();
     const triggerType = headersList.get('X-Trigger-Type');
     const cronSecret = headersList.get('authorization')?.split('Bearer ')[1];
@@ -134,6 +128,7 @@ export async function GET(request: Request) {
 
   } catch (error: any) {
     console.error("Error in cron job API route:", error);
+    // Now this will catch the specific initialization error from firebase-admin.ts
     const errorMessage = error.message || 'An unknown error occurred';
     return new NextResponse(JSON.stringify({ message: `API Route Error: ${errorMessage}` }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
@@ -143,7 +138,6 @@ export async function GET(request: Request) {
 // --- Data fetching functions ---
 
 async function getUpcomingTransactions(userId: string, reminderDays: number): Promise<(Income | Expense)[]> {
-    if (!adminDb) return [];
     const today = new Date();
     today.setHours(0, 0, 0, 0); 
 
@@ -169,7 +163,6 @@ async function getUpcomingTransactions(userId: string, reminderDays: number): Pr
 }
 
 async function getLowStockProducts(userId: string): Promise<Product[]> {
-    if (!adminDb) return [];
     const productsSnapshot = await adminDb.collection('users').doc(userId).collection('products').get();
     const products = productsSnapshot.docs.map(doc => doc.data() as Product);
 
@@ -177,7 +170,6 @@ async function getLowStockProducts(userId: string): Promise<Product[]> {
 }
 
 async function getUpcomingEvents(userId: string, daysBefore: number): Promise<any[]> {
-    if (!adminDb) return [];
     const familySnapshot = await adminDb.collection('users').doc(userId).collection('familyMembers').get();
     const familyMembers = familySnapshot.docs.map(doc => doc.data() as FamilyMember);
 
