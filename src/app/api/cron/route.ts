@@ -3,40 +3,45 @@ import { NextResponse } from 'next/server';
 import type { UserSettings, Income, Expense, Product, FamilyMember } from '@/lib/types';
 import { differenceInDays, parseISO, setYear as setYearDate, isFuture, format } from 'date-fns';
 import { headers } from 'next/headers';
-import * as admin from 'firebase-admin';
+import { adminDb, adminAuth, adminMessaging } from '@/lib/firebase-admin';
+import type * as admin from 'firebase-admin';
 
 export const dynamic = 'force-dynamic';
 
 // This function can be triggered by a cron job service.
 export async function GET(request: Request) {
-  // Dynamically import admin-sdk to prevent build errors
-  const { adminDb, adminAuth } = await import('@/lib/firebase-admin');
-  const { getMessaging } = await import('firebase-admin/messaging');
+  if (!adminDb || !adminAuth || !adminMessaging) {
+      console.error("Firebase Admin SDK not initialized. Check FIREBASE_SERVICE_ACCOUNT environment variable.");
+      return new NextResponse(JSON.stringify({ message: 'Server configuration error.' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
   
   const headersList = headers();
   const triggerType = headersList.get('X-Trigger-Type');
-  const authToken = (headersList.get('authorization') || '').split('Bearer ')[1];
-
+  const cronSecret = headersList.get('authorization')?.split('Bearer ')[1];
+  
   let userIdToProcess: string | null = null;
-
+  
   if (triggerType === 'manual') {
-      if (!authToken) {
-          return new NextResponse(JSON.stringify({ message: 'Missing Firebase ID token.' }), { status: 401 });
-      }
-      try {
-          const decodedToken = await adminAuth.verifyIdToken(authToken);
-          userIdToProcess = decodedToken.uid;
-          console.log(`Manual trigger for user: ${userIdToProcess}`);
-      } catch (error) {
-          console.error('Error verifying Firebase ID token:', error);
-          return new NextResponse(JSON.stringify({ message: 'Invalid Firebase ID token.' }), { status: 403 });
-      }
+    const idToken = headersList.get('authorization')?.split('Bearer ')[1];
+    if (!idToken) {
+        return new NextResponse(JSON.stringify({ message: 'Missing Firebase ID token.' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+    }
+    try {
+        const decodedToken = await adminAuth.verifyIdToken(idToken);
+        userIdToProcess = decodedToken.uid;
+        console.log(`Manual trigger for user: ${userIdToProcess}`);
+    } catch (error) {
+        console.error('Error verifying Firebase ID token:', error);
+        return new NextResponse(JSON.stringify({ message: 'Invalid Firebase ID token.' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+    }
   } else {
-      const authHeader = headersList.get('authorization');
-      if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-          return new NextResponse('Unauthorized', { status: 401 });
-      }
-      console.log('Scheduled cron job running...');
+    // This is for the scheduled cron job
+    if (cronSecret !== process.env.CRON_SECRET) {
+      console.log('CRON_SECRET', process.env.CRON_SECRET);
+      console.warn('Unauthorized cron job attempt.');
+      return new NextResponse('Unauthorized', { status: 401 });
+    }
+    console.log('Scheduled cron job running...');
   }
 
 
@@ -47,6 +52,7 @@ export async function GET(request: Request) {
     
     let usersQuery: admin.firestore.Query<admin.firestore.DocumentData> = adminDb.collection('users');
     if (userIdToProcess) {
+        // Query for a specific user document by its ID
         usersQuery = usersQuery.where(admin.firestore.FieldPath.documentId(), '==', userIdToProcess);
     }
     const usersSnapshot = await usersQuery.get();
@@ -60,7 +66,7 @@ export async function GET(request: Request) {
       };
       
       try {
-        const response = await getMessaging().sendEachForMulticast(message);
+        const response = await adminMessaging.sendEachForMulticast(message);
         console.log(`Successfully sent ${response.successCount} messages`);
         if (response.failureCount > 0) {
             const failedTokens: string[] = [];
@@ -132,7 +138,7 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error("Error in cron job:", error);
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-    return new NextResponse(JSON.stringify({ message: errorMessage }), { status: 500 });
+    return new NextResponse(JSON.stringify({ message: errorMessage }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 }
 
@@ -140,7 +146,7 @@ export async function GET(request: Request) {
 // --- Data fetching functions ---
 
 async function getUpcomingTransactions(userId: string, reminderDays: number): Promise<(Income | Expense)[]> {
-    const { adminDb } = await import('@/lib/firebase-admin');
+    if (!adminDb) return [];
     const today = new Date();
     today.setHours(0, 0, 0, 0); 
 
@@ -166,7 +172,7 @@ async function getUpcomingTransactions(userId: string, reminderDays: number): Pr
 }
 
 async function getLowStockProducts(userId: string): Promise<Product[]> {
-    const { adminDb } = await import('@/lib/firebase-admin');
+    if (!adminDb) return [];
     const productsSnapshot = await adminDb.collection('users').doc(userId).collection('products').get();
     const products = productsSnapshot.docs.map(doc => doc.data() as Product);
 
@@ -174,7 +180,7 @@ async function getLowStockProducts(userId: string): Promise<Product[]> {
 }
 
 async function getUpcomingEvents(userId: string, daysBefore: number): Promise<any[]> {
-    const { adminDb } = await import('@/lib/firebase-admin');
+    if (!adminDb) return [];
     const familySnapshot = await adminDb.collection('users').doc(userId).collection('familyMembers').get();
     const familyMembers = familySnapshot.docs.map(doc => doc.data() as FamilyMember);
 

@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -40,8 +39,6 @@ import { Switch } from '@/components/ui/switch';
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications, PermissionState } from '@capacitor/push-notifications';
 import { LocalNotifications } from '@capacitor/local-notifications';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import { getToken as getAppCheckToken } from 'firebase/app-check';
 
 
 export default function ProfilePage() {
@@ -222,22 +219,23 @@ export default function ProfilePage() {
   ) => {
       if (!settings || !settings.notificationSettings) return;
       
-      const newSettings: NotificationSettings = JSON.parse(JSON.stringify(settings.notificationSettings));
+      const newSettings: UserSettings = JSON.parse(JSON.stringify({ ...settings }));
+      const notificationSettings = newSettings.notificationSettings;
       
       if (category === 'transactions') {
-        if (field === 'enabled') newSettings.transactions.enabled = value as boolean;
-        if (field === 'time') newSettings.transactions.time = value as string;
-        if (field === 'reminderDays') newSettings.transactions.reminderDays = value as number;
+        if (field === 'enabled') notificationSettings.transactions.enabled = value as boolean;
+        if (field === 'time') notificationSettings.transactions.time = value as string;
+        if (field === 'reminderDays') notificationSettings.transactions.reminderDays = value as number;
       } else if (category === 'lowStock') {
-        if (field === 'enabled') newSettings.lowStock.enabled = value as boolean;
-        if (field === 'time') newSettings.lowStock.time = value as string;
+        if (field === 'enabled') notificationSettings.lowStock.enabled = value as boolean;
+        if (field === 'time') notificationSettings.lowStock.time = value as string;
       } else if (category === 'events') {
-        if (field === 'enabled') newSettings.events.enabled = value as boolean;
-        if (field === 'time') newSettings.events.time = value as string;
-        if (field === 'daysBefore') newSettings.events.daysBefore = value as number;
+        if (field === 'enabled') notificationSettings.events.enabled = value as boolean;
+        if (field === 'time') notificationSettings.events.time = value as string;
+        if (field === 'daysBefore') notificationSettings.events.daysBefore = value as number;
       }
       
-      setNotificationSettings(newSettings);
+      setNotificationSettings(notificationSettings);
   };
   
   const handleTestLocalNotification = async () => {
@@ -291,12 +289,26 @@ export default function ProfilePage() {
     setIsTriggeringCron(true);
     toast({ title: 'Triggering Server Notifications...', description: 'Please wait a moment.' });
     try {
+        const idToken = await user?.getIdToken();
+        if (!idToken) {
+            throw new Error("Could not get user ID token. Please log in again.");
+        }
+
         const response = await fetch('/api/cron', {
             method: 'GET',
-            headers: { 'X-Trigger-Type': 'manual' }
+            headers: { 
+                'X-Trigger-Type': 'manual',
+                'Authorization': `Bearer ${idToken}`,
+            }
         });
+        
+        // Check if the response has a body before trying to parse it
+        const responseText = await response.text();
+        if (!responseText) {
+            throw new Error('Received an empty response from the server.');
+        }
 
-        const result = await response.json();
+        const result = JSON.parse(responseText);
 
         if (!response.ok) {
             throw new Error(result.message || 'Failed to trigger cron job.');
@@ -307,6 +319,7 @@ export default function ProfilePage() {
             description: result.message || 'Server notifications checked.',
         });
     } catch (error: any) {
+        console.error('Error triggering cron job:', error);
         toast({
             variant: 'destructive',
             title: 'Error',
