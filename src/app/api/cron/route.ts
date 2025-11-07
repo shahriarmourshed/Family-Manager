@@ -3,13 +3,32 @@ import { NextResponse } from 'next/server';
 import type { UserSettings, Income, Expense, Product, FamilyMember } from '@/lib/types';
 import { differenceInDays, parseISO, setYear as setYearDate, isFuture, format } from 'date-fns';
 import { headers } from 'next/headers';
-import { adminDb, adminAuth, adminMessaging, admin } from '@/lib/firebase-admin';
-import type { firestore } from 'firebase-admin';
+
+// We must wrap the import of firebase-admin in a try/catch block to handle initialization errors
+let adminDb: any, adminAuth: any, adminMessaging: any, admin: any;
+let adminInitError: Error | null = null;
+try {
+  const adminModule = require('@/lib/firebase-admin');
+  adminDb = adminModule.adminDb;
+  adminAuth = adminModule.adminAuth;
+  adminMessaging = adminModule.adminMessaging;
+  admin = adminModule.admin;
+} catch (e: any) {
+  console.error('Failed to import firebase-admin:', e);
+  adminInitError = e;
+}
+
 
 export const dynamic = 'force-dynamic';
 
 // This function can be triggered by a cron job service.
 export async function GET(request: Request) {
+  // Immediately check if the admin SDK failed to initialize
+  if (adminInitError) {
+    console.error("API Route Error because admin SDK is not available:", adminInitError.message);
+    return new NextResponse(JSON.stringify({ message: `API Route Error: ${adminInitError.message}` }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+
   try {
     const headersList = headers();
     const triggerType = headersList.get('X-Trigger-Type');
@@ -39,7 +58,7 @@ export async function GET(request: Request) {
     const currentTime = format(now, 'HH:mm');
     console.log(`Cron job running at server time: ${currentTime}`);
     
-    let usersQuery: firestore.Query<firestore.DocumentData>;
+    let usersQuery;
     if (userIdToProcess) {
         usersQuery = adminDb.collection('users').where(admin.firestore.FieldPath.documentId(), '==', userIdToProcess);
     } else {
@@ -128,7 +147,6 @@ export async function GET(request: Request) {
 
   } catch (error: any) {
     console.error("Error in cron job API route:", error);
-    // Now this will catch the specific initialization error from firebase-admin.ts
     const errorMessage = error.message || 'An unknown error occurred';
     return new NextResponse(JSON.stringify({ message: `API Route Error: ${errorMessage}` }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
@@ -145,8 +163,8 @@ async function getUpcomingTransactions(userId: string, reminderDays: number): Pr
     const expensesSnapshot = await adminDb.collection('users').doc(userId).collection('expenses').where('status', '==', 'planned').get();
 
     const allTransactions = [
-        ...incomesSnapshot.docs.map(doc => doc.data() as Income),
-        ...expensesSnapshot.docs.map(doc => doc.data() as Expense)
+        ...incomesSnapshot.docs.map((doc: any) => doc.data() as Income),
+        ...expensesSnapshot.docs.map((doc: any) => doc.data() as Expense)
     ];
     
     const upcoming = allTransactions.filter(t => {
@@ -164,14 +182,14 @@ async function getUpcomingTransactions(userId: string, reminderDays: number): Pr
 
 async function getLowStockProducts(userId: string): Promise<Product[]> {
     const productsSnapshot = await adminDb.collection('users').doc(userId).collection('products').get();
-    const products = productsSnapshot.docs.map(doc => doc.data() as Product);
+    const products = productsSnapshot.docs.map((doc: any) => doc.data() as Product);
 
     return products.filter(p => p.lowStockThreshold !== undefined && p.currentStock <= p.lowStockThreshold);
 }
 
 async function getUpcomingEvents(userId: string, daysBefore: number): Promise<any[]> {
     const familySnapshot = await adminDb.collection('users').doc(userId).collection('familyMembers').get();
-    const familyMembers = familySnapshot.docs.map(doc => doc.data() as FamilyMember);
+    const familyMembers = familySnapshot.docs.map((doc: any) => doc.data() as FamilyMember);
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
