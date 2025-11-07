@@ -1,7 +1,5 @@
 
 import * as admin from 'firebase-admin';
-import * as fs from 'fs';
-import * as path from 'path';
 
 let adminApp: admin.app | null = null;
 let adminInitError: Error | null = null;
@@ -10,24 +8,14 @@ try {
   if (admin.apps.length > 0) {
     adminApp = admin.app();
   } else {
-    // Construct the path to the service account file
-    const serviceAccountPath = path.resolve(process.cwd(), 'firebase-service-account.json');
+    const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT;
     
-    // Check if the file exists before trying to read it
-    if (!fs.existsSync(serviceAccountPath)) {
-        throw new Error('firebase-service-account.json not found. Please ensure the file exists at the root of your project.');
+    if (!serviceAccountString) {
+      throw new Error('The FIREBASE_SERVICE_ACCOUNT environment variable is not set. Please check your .env.local file.');
     }
     
-    const serviceAccountString = fs.readFileSync(serviceAccountPath, 'utf8');
-    const serviceAccount = JSON.parse(serviceAccountString) as admin.ServiceAccount;
+    const serviceAccount = JSON.parse(serviceAccountString);
 
-    // Check for placeholder values.
-    if (serviceAccount.project_id === 'your-project-id') {
-      throw new Error(
-        'Firebase service account is not configured. Please replace the placeholder in firebase-service-account.json with your actual credentials.'
-      );
-    }
-    
     adminApp = admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });
@@ -35,7 +23,7 @@ try {
 } catch (e: any) {
   let errorMessage = e.message;
   if (e instanceof SyntaxError) {
-      errorMessage = `Failed to parse firebase-service-account.json. Please ensure it is a valid JSON file. Details: ${e.message}`;
+      errorMessage = `Failed to parse FIREBASE_SERVICE_ACCOUNT. Please ensure it is a valid JSON string in your .env.local file. Details: ${e.message}`;
   }
   
   console.error("CRITICAL: Firebase Admin initialization failed.", errorMessage);
@@ -46,8 +34,6 @@ if (!adminInitError && !adminApp) {
   adminInitError = new Error("Firebase Admin SDK is not available. The adminApp object is null for an unknown reason.");
 }
 
-
-// Export a function that throws if the SDK is not initialized
 const ensureAdminInitialized = () => {
     if (adminInitError) {
         throw adminInitError;
@@ -58,23 +44,8 @@ const ensureAdminInitialized = () => {
     return adminApp;
 }
 
-// Lazy-loaded exports
-export const adminDb = {
-  get firestore() {
-    return ensureAdminInitialized().firestore();
-  }
-}.firestore;
-
-export const adminAuth = {
-  get auth() {
-    return ensureAdminInitialized().auth();
-  }
-}.auth;
-
-export const adminMessaging = {
-  get messaging() {
-    return ensureAdminInitialized().messaging();
-  }
-}.messaging;
+export const adminDb = ensureAdminInitialized().firestore();
+export const adminAuth = ensureAdminInitialized().auth();
+export const adminMessaging = ensureAdminInitialized().messaging();
 
 export { admin, adminInitError };
