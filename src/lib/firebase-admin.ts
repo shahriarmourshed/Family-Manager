@@ -23,7 +23,7 @@ try {
 } catch (e: any) {
   let errorMessage = e.message;
   if (e instanceof SyntaxError) {
-      errorMessage = `Failed to parse FIREBASE_SERVICE_ACCOUNT. Please ensure it is a valid JSON string in your .env.local file. Details: ${e.message}`;
+      errorMessage = `Failed to parse FIREBASE_SERVICE_ACCOUNT. Please ensure it's a valid JSON string in your .env.local file. Details: ${e.message}`;
   }
   
   console.error("CRITICAL: Firebase Admin initialization failed.", errorMessage);
