@@ -4,14 +4,14 @@ import type { UserSettings, Income, Expense, Product, FamilyMember } from '@/lib
 import { differenceInDays, parseISO, setYear as setYearDate, isFuture, format } from 'date-fns';
 import { headers } from 'next/headers';
 import { adminDb, adminAuth, adminMessaging } from '@/lib/firebase-admin';
-import type * as admin from 'firebase-admin';
+import type { firestore } from 'firebase-admin';
 
 export const dynamic = 'force-dynamic';
 
 // This function can be triggered by a cron job service.
 export async function GET(request: Request) {
   if (!adminDb || !adminAuth || !adminMessaging) {
-      console.error("Firebase Admin SDK not initialized. Check FIREBASE_SERVICE_ACCOUNT environment variable.");
+      console.error("Firebase Admin SDK not initialized. Check server logs for initialization errors.");
       return new NextResponse(JSON.stringify({ message: 'Server configuration error.' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
   
@@ -36,8 +36,8 @@ export async function GET(request: Request) {
     }
   } else {
     // This is for the scheduled cron job
-    if (cronSecret !== process.env.CRON_SECRET) {
-      console.log('CRON_SECRET', process.env.CRON_SECRET);
+    // IMPORTANT: You need to set the CRON_SECRET environment variable in your hosting provider for this to work in production.
+    if (!process.env.CRON_SECRET || cronSecret !== process.env.CRON_SECRET) {
       console.warn('Unauthorized cron job attempt.');
       return new NextResponse('Unauthorized', { status: 401 });
     }
@@ -50,10 +50,11 @@ export async function GET(request: Request) {
     const currentTime = format(now, 'HH:mm');
     console.log(`Cron job running at server time: ${currentTime}`);
     
-    let usersQuery: admin.firestore.Query<admin.firestore.DocumentData> = adminDb.collection('users');
+    let usersQuery: firestore.Query<firestore.DocumentData>;
     if (userIdToProcess) {
-        // Query for a specific user document by its ID
-        usersQuery = usersQuery.where(admin.firestore.FieldPath.documentId(), '==', userIdToProcess);
+        usersQuery = adminDb.collection('users').where(firestore.FieldPath.documentId(), '==', userIdToProcess);
+    } else {
+        usersQuery = adminDb.collection('users');
     }
     const usersSnapshot = await usersQuery.get();
 

@@ -1,22 +1,14 @@
 import * as admin from 'firebase-admin';
-
-const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT;
-
-if (!serviceAccountString) {
-  console.warn("FIREBASE_SERVICE_ACCOUNT is not set. Firebase Admin SDK will not be initialized.");
-}
+import serviceAccount from '../../firebase-service-account.json';
 
 if (!admin.apps.length) {
-    if (serviceAccountString) {
-        try {
-            const serviceAccount = JSON.parse(serviceAccountString);
-            admin.initializeApp({
-                credential: admin.credential.cert(serviceAccount),
-            });
-        } catch (e) {
-            console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT. Make sure it's a valid JSON string.", e);
-        }
-    }
+  try {
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount as admin.ServiceAccount),
+    });
+  } catch (e) {
+    console.error("Firebase Admin initialization error:", e);
+  }
 }
 
 export const adminDb = admin.apps.length ? admin.firestore() : null;
