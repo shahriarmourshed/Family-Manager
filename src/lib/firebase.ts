@@ -18,14 +18,20 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
 // Initialize Firestore with offline persistence
-const db = initializeFirestore(app, {});
-enableIndexedDbPersistence(db).catch((err) => {
+let db;
+try {
+  db = initializeFirestore(app, {});
+  enableIndexedDbPersistence(db).catch((err) => {
     if (err.code === 'failed-precondition') {
         console.warn('Firebase persistence failed. This can happen with multiple tabs open.');
     } else if (err.code === 'unimplemented') {
         console.warn('The current browser does not support all of the features required to enable persistence.');
     }
-});
+  });
+} catch(e) {
+  console.error("Error initializing Firestore with persistence", e);
+  db = getFirestore(app); // Fallback to non-persistent Firestore
+}
 
 
 // Get a messaging instance

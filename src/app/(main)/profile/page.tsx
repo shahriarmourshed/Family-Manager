@@ -236,31 +236,41 @@ export default function ProfilePage() {
   
   const handleTestLocalNotification = async () => {
     try {
-      if (!(await LocalNotifications.checkPermissions()).display === 'granted') {
-        if ((await LocalNotifications.requestPermissions()).display !== 'granted') {
-          throw new Error('Local notification permission denied.');
+      if (Capacitor.isNativePlatform()) {
+        const permResult = await LocalNotifications.checkPermissions();
+        if (permResult.display !== 'granted') {
+          const requestResult = await LocalNotifications.requestPermissions();
+          if (requestResult.display !== 'granted') {
+            throw new Error('Local notification permission denied.');
+          }
         }
+
+        await LocalNotifications.schedule({
+          notifications: [
+            {
+              title: 'Test Notification',
+              body: 'If you see this, local notifications are working!',
+              id: new Date().getTime(),
+              schedule: { at: new Date(Date.now() + 5000) }, // 5 seconds from now
+              sound: undefined,
+              attachments: undefined,
+              actionTypeId: '',
+              extra: null,
+            },
+          ],
+        });
+
+        toast({
+          title: 'Notification Scheduled',
+          description: 'You should receive a local notification in 5 seconds.',
+        });
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Not on a native device',
+          description: 'Local notifications can only be tested on a native Android or iOS app.',
+        });
       }
-
-      await LocalNotifications.schedule({
-        notifications: [
-          {
-            title: 'Test Notification',
-            body: 'If you see this, local notifications are working!',
-            id: new Date().getTime(),
-            schedule: { at: new Date(Date.now() + 5000) }, // 5 seconds from now
-            sound: undefined,
-            attachments: undefined,
-            actionTypeId: '',
-            extra: null,
-          },
-        ],
-      });
-
-      toast({
-        title: 'Notification Scheduled',
-        description: 'You should receive a local notification in 5 seconds.',
-      });
     } catch (error: any) {
       console.error('Error scheduling local notification', error);
       toast({
