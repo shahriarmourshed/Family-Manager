@@ -1,47 +1,80 @@
 
 import * as admin from 'firebase-admin';
-import serviceAccount from '../../firebase-service-account.json';
+import * as fs from 'fs';
+import * as path from 'path';
 
 let adminApp: admin.app | null = null;
+let adminInitError: Error | null = null;
 
 try {
   if (admin.apps.length > 0) {
     adminApp = admin.app();
   } else {
-    // Cast the imported JSON to the type Firebase expects.
-    const serviceAccountInfo = serviceAccount as admin.ServiceAccount;
+    // Construct the path to the service account file
+    const serviceAccountPath = path.resolve(process.cwd(), 'firebase-service-account.json');
+    
+    // Check if the file exists before trying to read it
+    if (!fs.existsSync(serviceAccountPath)) {
+        throw new Error('firebase-service-account.json not found. Please ensure the file exists at the root of your project.');
+    }
+    
+    const serviceAccountString = fs.readFileSync(serviceAccountPath, 'utf8');
+    const serviceAccount = JSON.parse(serviceAccountString) as admin.ServiceAccount;
 
     // Check for placeholder values.
-    if (serviceAccountInfo.project_id === 'your-project-id') {
+    if (serviceAccount.project_id === 'your-project-id') {
       throw new Error(
         'Firebase service account is not configured. Please replace the placeholder in firebase-service-account.json with your actual credentials.'
       );
     }
     
     adminApp = admin.initializeApp({
-      credential: admin.credential.cert(serviceAccountInfo),
+      credential: admin.credential.cert(serviceAccount),
     });
   }
 } catch (e: any) {
-  // Catch parsing errors or initialization errors.
-  console.error("CRITICAL: Firebase Admin initialization failed.", e.message);
-
-  // Re-throw a more informative error for the API route to catch.
-  let rawContent = '';
-  try {
-    rawContent = JSON.stringify(serviceAccount).substring(0, 100);
-  } catch {
-    rawContent = "Could not read or stringify the service account file."
+  let errorMessage = e.message;
+  if (e instanceof SyntaxError) {
+      errorMessage = `Failed to parse firebase-service-account.json. Please ensure it is a valid JSON file. Details: ${e.message}`;
   }
   
-  throw new Error(`Firebase Admin initialization failed: ${e.message}. The service account file seems to be invalid. Start of file content: "${rawContent}..."`);
+  console.error("CRITICAL: Firebase Admin initialization failed.", errorMessage);
+  adminInitError = new Error(`Firebase Admin initialization failed: ${errorMessage}`);
 }
 
-if (!adminApp) {
-  throw new Error("Firebase Admin SDK is not available. The adminApp object is null.");
+if (!adminInitError && !adminApp) {
+  adminInitError = new Error("Firebase Admin SDK is not available. The adminApp object is null for an unknown reason.");
 }
 
-export const adminDb = adminApp.firestore();
-export const adminAuth = adminApp.auth();
-export const adminMessaging = adminApp.messaging();
-export { admin };
+
+// Export a function that throws if the SDK is not initialized
+const ensureAdminInitialized = () => {
+    if (adminInitError) {
+        throw adminInitError;
+    }
+    if (!adminApp) {
+        throw new Error("Firebase Admin SDK could not be initialized.");
+    }
+    return adminApp;
+}
+
+// Lazy-loaded exports
+export const adminDb = {
+  get firestore() {
+    return ensureAdminInitialized().firestore();
+  }
+}.firestore;
+
+export const adminAuth = {
+  get auth() {
+    return ensureAdminInitialized().auth();
+  }
+}.auth;
+
+export const adminMessaging = {
+  get messaging() {
+    return ensureAdminInitialized().messaging();
+  }
+}.messaging;
+
+export { admin, adminInitError };
