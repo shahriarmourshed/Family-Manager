@@ -1,6 +1,4 @@
-
 import * as admin from 'firebase-admin';
-require('dotenv').config();
 
 const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT;
 
