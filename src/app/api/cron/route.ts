@@ -2,30 +2,53 @@
 import { NextResponse } from 'next/server';
 import type { UserSettings, Income, Expense, Product, FamilyMember } from '@/lib/types';
 import { differenceInDays, parseISO, setYear as setYearDate, isFuture, format } from 'date-fns';
+import { headers } from 'next/headers';
 
 export const dynamic = 'force-dynamic';
 
 // This function can be triggered by a cron job service.
 export async function GET(request: Request) {
   // Dynamically import admin-sdk to prevent build errors
-  const { adminDb } = await import('@/lib/firebase-admin');
+  const { adminDb, adminAuth } = await import('@/lib/firebase-admin');
   const { getMessaging } = await import('firebase-admin/messaging');
   
-  // Authorization check
-  const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return new NextResponse('Unauthorized', { status: 401 });
+  const headersList = headers();
+  const triggerType = headersList.get('X-Trigger-Type');
+  const authToken = (headersList.get('authorization') || '').split('Bearer ')[1];
+
+  let userIdToProcess: string | null = null;
+
+  if (triggerType === 'manual') {
+      if (!authToken) {
+          return new NextResponse(JSON.stringify({ message: 'Missing Firebase ID token.' }), { status: 401 });
+      }
+      try {
+          const decodedToken = await adminAuth.verifyIdToken(authToken);
+          userIdToProcess = decodedToken.uid;
+          console.log(`Manual trigger for user: ${userIdToProcess}`);
+      } catch (error) {
+          console.error('Error verifying Firebase ID token:', error);
+          return new NextResponse(JSON.stringify({ message: 'Invalid Firebase ID token.' }), { status: 403 });
+      }
+  } else {
+      const authHeader = headersList.get('authorization');
+      if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+          return new NextResponse('Unauthorized', { status: 401 });
+      }
+      console.log('Scheduled cron job running...');
   }
+
 
   try {
     const now = new Date();
-    // Use a specific timezone for consistency if needed, e.g., 'UTC'
-    // For local time of server:
     const currentTime = format(now, 'HH:mm');
-
     console.log(`Cron job running at server time: ${currentTime}`);
-
-    const usersSnapshot = await adminDb.collection('users').get();
+    
+    let usersQuery = adminDb.collection('users');
+    if (userIdToProcess) {
+        usersQuery = usersQuery.where(admin.firestore.FieldPath.documentId(), '==', userIdToProcess) as any;
+    }
+    const usersSnapshot = await usersQuery.get();
 
     const sendNotification = async (tokens: string[], title: string, body: string) => {
       if (tokens.length === 0) return;
@@ -46,12 +69,13 @@ export async function GET(request: Request) {
                 }
             });
             console.log('List of tokens that caused failures:', failedTokens);
-            // Optionally, implement logic to remove invalid tokens from user settings
         }
       } catch (error) {
         console.error('Error sending message:', error);
       }
     }
+
+    let notificationsSent = 0;
 
     for (const userDoc of usersSnapshot.docs) {
       const userId = userDoc.id;
@@ -64,41 +88,50 @@ export async function GET(request: Request) {
       if (!settings.fcmTokens || settings.fcmTokens.length === 0 || !settings.notificationSettings) continue;
 
       const { transactions, lowStock, events } = settings.notificationSettings;
+      const isManualTrigger = !!userIdToProcess;
 
       // Check for upcoming transactions
-      if (transactions?.enabled && transactions.time === currentTime) {
+      if (transactions?.enabled && (transactions.time === currentTime || isManualTrigger)) {
         const reminderDays = transactions.reminderDays || 3;
         const upcomingTxs = await getUpcomingTransactions(userId, reminderDays);
         if (upcomingTxs.length > 0) {
           const body = `You have ${upcomingTxs.length} upcoming transaction(s) due soon.`;
           await sendNotification(settings.fcmTokens, "Upcoming Transactions", body);
+          notificationsSent++;
         }
       }
       
       // Check for low stock products
-      if (lowStock?.enabled && lowStock.time === currentTime) {
+      if (lowStock?.enabled && (lowStock.time === currentTime || isManualTrigger)) {
         const products = await getLowStockProducts(userId);
         if (products.length > 0) {
           const body = `You have ${products.length} product(s) running low on stock.`;
           await sendNotification(settings.fcmTokens, "Low Stock Alert", body);
+          notificationsSent++;
         }
       }
 
       // Check for upcoming events
-      if (events?.enabled && events.time === currentTime) {
+      if (events?.enabled && (events.time === currentTime || isManualTrigger)) {
         const daysBefore = events.daysBefore || 1;
         const upcomingEvents = await getUpcomingEvents(userId, daysBefore);
         if (upcomingEvents.length > 0) {
           const body = `You have ${upcomingEvents.length} upcoming family event(s) in the next ${daysBefore === 1 ? 'day' : `${daysBefore} days`}.`;
           await sendNotification(settings.fcmTokens, "Upcoming Family Events", body);
+          notificationsSent++;
         }
       }
     }
+    
+    const message = userIdToProcess 
+        ? `Manual check complete. Found and sent ${notificationsSent} notifications for you.`
+        : 'Scheduled cron job executed successfully.';
 
-    return NextResponse.json({ success: true, message: 'Cron job executed successfully.' });
+    return NextResponse.json({ success: true, message });
   } catch (error) {
     console.error("Error in cron job:", error);
-    return new NextResponse('Internal Server Error', { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    return new NextResponse(JSON.stringify({ message: errorMessage }), { status: 500 });
   }
 }
 

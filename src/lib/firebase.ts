@@ -3,6 +3,8 @@ import { initializeApp, getApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore, enableIndexedDbPersistence, initializeFirestore } from "firebase/firestore";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
+import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
+
 
 const firebaseConfig = {
   apiKey: "AIzaSyAOnRgf3OSlJ4F516dmtoylNZpVi1ofSLA",
@@ -16,6 +18,14 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const auth = getAuth(app);
+
+// Initialize App Check
+if (typeof window !== 'undefined') {
+  initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider('6Ld-fA8qAAAAAPx_AmA2-5iE0P425s5aD9m_5C5P'), // Replace with your reCAPTCHA site key
+    isTokenAutoRefreshEnabled: true
+  });
+}
 
 // Initialize Firestore with offline persistence
 let db;

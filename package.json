@@ -15,6 +15,7 @@
     "@capacitor/core": "^6.1.1",
     "@capacitor/local-notifications": "^6.0.0",
     "@capacitor/push-notifications": "^6.0.0",
+    "@firebase/app-check": "^0.9.2",
     "@hookform/resolvers": "^3.9.0",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",

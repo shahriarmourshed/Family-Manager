@@ -17,7 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
-import { LogOut, ShieldAlert, Trash2, PlusCircle, Bell, Clock, ShoppingBasket, CalendarClock } from 'lucide-react';
+import { LogOut, ShieldAlert, Trash2, PlusCircle, Bell, Clock, ShoppingBasket, CalendarClock, Server } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import {
@@ -34,12 +34,15 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { requestForToken } from '@/lib/firebase';
+import { requestForToken, app } from '@/lib/firebase';
 import type { NotificationSettings } from '@/lib/types';
 import { Switch } from '@/components/ui/switch';
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications, PermissionState } from '@capacitor/push-notifications';
 import { LocalNotifications } from '@capacitor/local-notifications';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getToken as getAppCheckToken } from 'firebase/app-check';
+
 
 export default function ProfilePage() {
   const { 
@@ -60,6 +63,8 @@ export default function ProfilePage() {
   const [newExpenseCategoryName, setNewExpenseCategoryName] = useState('');
   const [newIncomeCategoryName, setNewIncomeCategoryName] = useState('');
   const [notificationPermission, setNotificationPermission] = useState<PermissionState | NotificationPermission | string>('prompt');
+  const [isTriggeringCron, setIsTriggeringCron] = useState(false);
+
 
   useEffect(() => {
     // This effect runs only on the client.
@@ -282,6 +287,36 @@ export default function ProfilePage() {
     }
   };
 
+  const triggerCronJob = async () => {
+    setIsTriggeringCron(true);
+    toast({ title: 'Triggering Server Notifications...', description: 'Please wait a moment.' });
+    try {
+        const response = await fetch('/api/cron', {
+            method: 'GET',
+            headers: { 'X-Trigger-Type': 'manual' }
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.message || 'Failed to trigger cron job.');
+        }
+
+        toast({
+            title: 'Success',
+            description: result.message || 'Server notifications checked.',
+        });
+    } catch (error: any) {
+        toast({
+            variant: 'destructive',
+            title: 'Error',
+            description: error.message || 'Could not trigger server notifications.',
+        });
+    } finally {
+        setIsTriggeringCron(false);
+    }
+  };
+
 
   return (
     <div className="container mx-auto">
@@ -323,8 +358,8 @@ export default function ProfilePage() {
                     {notificationPermission === 'granted' ? 'Enabled' : 'Enable'}
                 </Button>
             </div>
-
-            {Capacitor.isNativePlatform() && (
+            
+            <div className='flex flex-col sm:flex-row gap-2'>
               <Button
                 variant="outline"
                 onClick={handleTestLocalNotification}
@@ -333,7 +368,16 @@ export default function ProfilePage() {
                 <Bell className="mr-2 h-4 w-4" />
                 Test Local Notification
               </Button>
-            )}
+               <Button
+                variant="outline"
+                onClick={triggerCronJob}
+                className="w-full"
+                disabled={isTriggeringCron}
+              >
+                <Server className="mr-2 h-4 w-4" />
+                {isTriggeringCron ? 'Triggering...' : 'Trigger Server Notifications'}
+              </Button>
+            </div>
             
             <div className="space-y-4 pt-4">
               <Separator />
