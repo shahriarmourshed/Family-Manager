@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "314321317316",
+    "firebase_url": "https://familyverse-5xnxn-default-rtdb.firebaseio.com",
+    "project_id": "familyverse-5xnxn",
+    "storage_bucket": "familyverse-5xnxn.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:314321317316:android:3bcf91de162ff55bb68891",
+        "android_client_info": {
+          "package_name": "com.family.manager"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "314321317316-b002kimkq0q4tgfbni5pdsau94t68etb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDqeFlQKH6q8UdRGK9bvHWvtKJKMkRsBko"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "314321317316-b002kimkq0q4tgfbni5pdsau94t68etb.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
