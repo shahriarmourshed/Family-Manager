@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import type { UserSettings, Income, Expense, Product, FamilyMember } from '@/lib/types';
 import { differenceInDays, parseISO, setYear as setYearDate, isFuture, format } from 'date-fns';
 import { headers } from 'next/headers';
+import * as admin from 'firebase-admin';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,9 +45,9 @@ export async function GET(request: Request) {
     const currentTime = format(now, 'HH:mm');
     console.log(`Cron job running at server time: ${currentTime}`);
     
-    let usersQuery = adminDb.collection('users');
+    let usersQuery: admin.firestore.Query<admin.firestore.DocumentData> = adminDb.collection('users');
     if (userIdToProcess) {
-        usersQuery = usersQuery.where(admin.firestore.FieldPath.documentId(), '==', userIdToProcess) as any;
+        usersQuery = usersQuery.where(admin.firestore.FieldPath.documentId(), '==', userIdToProcess);
     }
     const usersSnapshot = await usersQuery.get();
 
@@ -59,7 +60,7 @@ export async function GET(request: Request) {
       };
       
       try {
-        const response = await getMessaging().sendMulticast(message);
+        const response = await getMessaging().sendEachForMulticast(message);
         console.log(`Successfully sent ${response.successCount} messages`);
         if (response.failureCount > 0) {
             const failedTokens: string[] = [];
