@@ -1,3 +1,4 @@
+
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
@@ -9,6 +10,10 @@ const config: CapacitorConfig = {
     PushNotifications: {
       presentationOptions: ["badge", "sound", "alert"],
     },
+  },
+  server: {
+    url: 'http://YOUR_LIVE_APP_URL.com', // <-- IMPORTANT: Replace with your deployed URL
+    cleartext: true,
   },
 };
 
