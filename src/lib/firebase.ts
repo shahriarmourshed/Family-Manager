@@ -1,7 +1,7 @@
 
 import { initializeApp, getApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore, enableIndexedDbPersistence, initializeFirestore } from "firebase/firestore";
+import { getFirestore, enableIndexedDbPersistence, initializeFirestore, persistentLocalCache } from "firebase/firestore";
 import { getMessaging, getToken, onMessage } from "firebase/messaging";
 import { initializeAppCheck, ReCaptchaV3Provider } from "@firebase/app-check";
 
@@ -20,24 +20,12 @@ const firebaseConfig = {
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
-// Initialize App Check
-if (typeof window !== 'undefined') {
-  initializeAppCheck(app, {
-    provider: new ReCaptchaV3Provider('6Ld-fA8qAAAAAPx_AmA2-5iE0P425s5aD9m_5C5P'), // Replace with your reCAPTCHA site key
-    isTokenAutoRefreshEnabled: true
-  });
-}
 
 // Initialize Firestore with offline persistence
 let db;
 try {
-  db = initializeFirestore(app, {});
-  enableIndexedDbPersistence(db).catch((err) => {
-    if (err.code === 'failed-precondition') {
-        console.warn('Firebase persistence failed. This can happen with multiple tabs open.');
-    } else if (err.code === 'unimplemented') {
-        console.warn('The current browser does not support all of the features required to enable persistence.');
-    }
+  db = initializeFirestore(app, {
+    localCache: persistentLocalCache({})
   });
 } catch(e) {
   console.error("Error initializing Firestore with persistence", e);
