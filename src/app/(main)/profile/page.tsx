@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
-import { LogOut, ShieldAlert, Trash2, PlusCircle, Bell, Clock, ShoppingBasket, CalendarClock, Server } from 'lucide-react';
+import { LogOut, ShieldAlert, Trash2, PlusCircle, Bell, Clock, ShoppingBasket, CalendarClock } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
 import {
@@ -38,7 +38,6 @@ import type { NotificationSettings } from '@/lib/types';
 import { Switch } from '@/components/ui/switch';
 import { Capacitor } from '@capacitor/core';
 import { PushNotifications, PermissionState } from '@capacitor/push-notifications';
-import { LocalNotifications } from '@capacitor/local-notifications';
 
 
 export default function ProfilePage() {
@@ -60,7 +59,6 @@ export default function ProfilePage() {
   const [newExpenseCategoryName, setNewExpenseCategoryName] = useState('');
   const [newIncomeCategoryName, setNewIncomeCategoryName] = useState('');
   const [notificationPermission, setNotificationPermission] = useState<PermissionState | NotificationPermission | string>('prompt');
-  const [isTriggeringCron, setIsTriggeringCron] = useState(false);
 
 
   useEffect(() => {
@@ -237,98 +235,6 @@ export default function ProfilePage() {
       
       setNotificationSettings(notificationSettings);
   };
-  
-  const handleTestLocalNotification = async () => {
-    try {
-      if (Capacitor.isNativePlatform()) {
-        const permResult = await LocalNotifications.checkPermissions();
-        if (permResult.display !== 'granted') {
-          const requestResult = await LocalNotifications.requestPermissions();
-          if (requestResult.display !== 'granted') {
-            throw new Error('Local notification permission denied.');
-          }
-        }
-
-        await LocalNotifications.schedule({
-          notifications: [
-            {
-              title: 'Test Notification',
-              body: 'If you see this, local notifications are working!',
-              id: new Date().getTime(),
-              schedule: { at: new Date(Date.now() + 5000) }, // 5 seconds from now
-              sound: undefined,
-              attachments: undefined,
-              actionTypeId: '',
-              extra: null,
-            },
-          ],
-        });
-
-        toast({
-          title: 'Notification Scheduled',
-          description: 'You should receive a local notification in 5 seconds.',
-        });
-      } else {
-        toast({
-          variant: 'destructive',
-          title: 'Not on a native device',
-          description: 'Local notifications can only be tested on a native Android or iOS app.',
-        });
-      }
-    } catch (error: any) {
-      console.error('Error scheduling local notification', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error.message || 'Could not schedule local notification.',
-      });
-    }
-  };
-
-  const triggerCronJob = async () => {
-    setIsTriggeringCron(true);
-    toast({ title: 'Triggering Server Notifications...', description: 'Please wait a moment.' });
-    try {
-        const idToken = await user?.getIdToken();
-        if (!idToken) {
-            throw new Error("Could not get user ID token. Please log in again.");
-        }
-
-        const response = await fetch('/api/cron', {
-            method: 'GET',
-            headers: { 
-                'X-Trigger-Type': 'manual',
-                'Authorization': `Bearer ${idToken}`,
-            }
-        });
-        
-        // Check if the response has a body before trying to parse it
-        const responseText = await response.text();
-        if (!responseText) {
-            throw new Error('Received an empty response from the server.');
-        }
-
-        const result = JSON.parse(responseText);
-
-        if (!response.ok) {
-            throw new Error(result.message || 'Failed to trigger cron job.');
-        }
-
-        toast({
-            title: 'Success',
-            description: result.message || 'Server notifications checked.',
-        });
-    } catch (error: any) {
-        console.error('Error triggering cron job:', error);
-        toast({
-            variant: 'destructive',
-            title: 'Error',
-            description: error.message || 'Could not trigger server notifications.',
-        });
-    } finally {
-        setIsTriggeringCron(false);
-    }
-  };
 
 
   return (
@@ -370,26 +276,6 @@ export default function ProfilePage() {
                     <Bell className="mr-2 h-4 w-4"/>
                     {notificationPermission === 'granted' ? 'Enabled' : 'Enable'}
                 </Button>
-            </div>
-            
-            <div className='flex flex-col sm:flex-row gap-2'>
-              <Button
-                variant="outline"
-                onClick={handleTestLocalNotification}
-                className="w-full"
-              >
-                <Bell className="mr-2 h-4 w-4" />
-                Test Local Notification
-              </Button>
-               <Button
-                variant="outline"
-                onClick={triggerCronJob}
-                className="w-full"
-                disabled={isTriggeringCron}
-              >
-                <Server className="mr-2 h-4 w-4" />
-                {isTriggeringCron ? 'Triggering...' : 'Trigger Server Notifications'}
-              </Button>
             </div>
             
             <div className="space-y-4 pt-4">
