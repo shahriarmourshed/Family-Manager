@@ -446,5 +446,3 @@ export const deleteIncomeCategoryOp = async (userId: string, categoryId: string)
   const docRef = doc(db, `users/${userId}/incomeCategories`, categoryId);
   await deleteDoc(docRef);
 };
-
-    
