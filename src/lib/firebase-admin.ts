@@ -1,5 +1,6 @@
 
 import * as admin from 'firebase-admin';
+import 'dotenv/config';
 
 let adminApp: admin.app | null = null;
 let adminInitError: Error | null = null;
@@ -11,7 +12,7 @@ try {
     const serviceAccountString = process.env.FIREBASE_SERVICE_ACCOUNT;
     
     if (!serviceAccountString) {
-      throw new Error('The FIREBASE_SERVICE_ACCOUNT environment variable is not set. Please check your .env.local file.');
+      throw new Error('The FIREBASE_SERVICE_ACCOUNT environment variable is not set. Please check your .env file.');
     }
     
     const serviceAccount = JSON.parse(serviceAccountString);
@@ -26,7 +27,7 @@ try {
 } catch (e: any) {
   let errorMessage = e.message;
   if (e instanceof SyntaxError) {
-      errorMessage = `Failed to parse FIREBASE_SERVICE_ACCOUNT. Please ensure it's a valid JSON string in your .env.local file. Details: ${e.message}`;
+      errorMessage = `Failed to parse FIREBASE_SERVICE_ACCOUNT. Please ensure it's a valid JSON string in your .env file. Details: ${e.message}`;
   }
   
   console.error("CRITICAL: Firebase Admin initialization failed.", errorMessage);
