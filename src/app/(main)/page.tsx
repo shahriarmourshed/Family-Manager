@@ -11,7 +11,7 @@ import {
   CardDescription,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Utensils, ChevronRight, AlertCircle, Gift } from 'lucide-react';
+import { PlusCircle, Utensils, ChevronRight, AlertCircle, Gift, Bell } from 'lucide-react';
 import ExpenseChart from '@/components/budget/expense-chart';
 import PageHeader from '@/components/common/page-header';
 import { useCurrency } from '@/context/currency-context';
@@ -34,6 +34,7 @@ import type { Income, Expense, Product } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
+import { Badge } from '@/components/ui/badge';
 
 export default function DashboardPage() {
   const { getSymbol } = useCurrency();
@@ -177,6 +178,12 @@ export default function DashboardPage() {
     }
     return events.sort((a, b) => a.daysLeft - b.daysLeft);
   }, [familyMembers]);
+  
+  const notificationCount = useMemo(() => {
+    const eventReminderDays = settings?.notificationSettings?.events?.daysBefore || 7;
+    const filteredEvents = upcomingEvents.filter(e => e.daysLeft <= eventReminderDays);
+    return upcomingTransactions.length + lowStockProducts.length + filteredEvents.length;
+  }, [upcomingTransactions, lowStockProducts, upcomingEvents, settings]);
 
 
   if (loading) {
@@ -196,7 +203,19 @@ export default function DashboardPage() {
 
   return (
     <div className="container mx-auto">
-      <PageHeader title="Welcome to Family Manager!" subtitle="Your family's command center." />
+      <PageHeader title="Welcome to Family Manager!" subtitle="Your family's command center.">
+         <Link href="/notifications">
+            <Button variant="outline" size="icon" className="relative">
+              <Bell className="h-4 w-4" />
+              {notificationCount > 0 && (
+                <Badge variant="destructive" className="absolute -top-2 -right-2 h-5 w-5 justify-center rounded-full p-0">
+                  {notificationCount}
+                </Badge>
+              )}
+               <span className="sr-only">View Notifications</span>
+            </Button>
+          </Link>
+      </PageHeader>
       
       <div className="grid gap-4 px-4 sm:px-0 md:grid-cols-2 lg:grid-cols-4">
         <Card className="lg:col-span-2">
