@@ -76,6 +76,8 @@ interface DataContextType {
   expenseCategories: ExpenseCategory[];
   incomeCategories: IncomeCategory[];
   settings: UserSettings;
+  lastSeenNotifications: Date | null;
+  updateLastSeenNotifications: () => void;
   setSavingGoal: (goal: number) => void;
   setNotificationSettings: (settings: NotificationSettings) => void;
   addFcmToken: (token: string) => Promise<void>;
@@ -117,8 +119,27 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
   const [incomeCategories, setIncomeCategories] = useState<IncomeCategory[]>([]);
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
-  
+  const [lastSeenNotifications, setLastSeenNotifications] = useState<Date | null>(null);
+
   const userId = user?.uid || null;
+
+  useEffect(() => {
+    if (userId) {
+        const storedTimestamp = localStorage.getItem(`lastSeenNotifications_${userId}`);
+        if (storedTimestamp) {
+            setLastSeenNotifications(new Date(storedTimestamp));
+        }
+    } else {
+        setLastSeenNotifications(null);
+    }
+  }, [userId]);
+
+  const updateLastSeenNotifications = useCallback(() => {
+    if (!userId) return;
+    const now = new Date();
+    setLastSeenNotifications(now);
+    localStorage.setItem(`lastSeenNotifications_${userId}`, now.toISOString());
+  }, [userId]);
 
   // Fetch initial data and set up listeners
   useEffect(() => {
@@ -408,6 +429,8 @@ export function DataProvider({ children }: { children: ReactNode }) {
     expenseCategories,
     incomeCategories,
     settings,
+    lastSeenNotifications,
+    updateLastSeenNotifications,
     setSavingGoal, 
     setNotificationSettings,
     addFcmToken,
@@ -450,3 +473,5 @@ export function useData() {
   }
   return context;
 }
+
+    

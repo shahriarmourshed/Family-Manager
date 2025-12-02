@@ -1,7 +1,8 @@
 
+
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import PageHeader from "@/components/common/page-header";
@@ -14,8 +15,12 @@ import { Bell, AlertCircle, Gift, Wallet, ShoppingBasket } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function NotificationsPage() {
-  const { products, expenses, incomes, familyMembers, settings, loading } = useData();
+  const { products, expenses, incomes, familyMembers, settings, loading, updateLastSeenNotifications } = useData();
   const { getSymbol } = useCurrency();
+
+  useEffect(() => {
+    updateLastSeenNotifications();
+  }, [updateLastSeenNotifications]);
 
   const upcomingTransactions = useMemo(() => {
     const today = new Date();
@@ -178,3 +183,5 @@ export default function NotificationsPage() {
     </div>
   );
 }
+
+    
