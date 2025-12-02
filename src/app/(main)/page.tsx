@@ -38,7 +38,7 @@ import { Badge } from '@/components/ui/badge';
 
 export default function DashboardPage() {
   const { getSymbol } = useCurrency();
-  const { products, expenses, incomes, settings, addExpense, loading, familyMembers, expenseCategories } = useData();
+  const { products, expenses, incomes, settings, addExpense, loading, familyMembers, expenseCategories, lastSeenNotifications } = useData();
   const [selectedYear, setSelectedYear] = useState(getYear(new Date()));
 
   // Dialog states
@@ -153,6 +153,7 @@ export default function DashboardPage() {
               eventName: 'Birthday',
               eventDate: nextBirthday,
               daysLeft: dateDiff(nextBirthday, today),
+              createdAt: member.createdAt,
             });
           }
         } catch (e) { console.error("Invalid birthday date for", member.name) }
@@ -171,6 +172,7 @@ export default function DashboardPage() {
                     eventName: member.specialEventName,
                     eventDate: nextEvent,
                     daysLeft: dateDiff(nextEvent, today),
+                    createdAt: member.createdAt,
                 });
              }
         } catch (e) { console.error("Invalid special event date for", member.name)}
@@ -179,11 +181,23 @@ export default function DashboardPage() {
     return events.sort((a, b) => a.daysLeft - b.daysLeft);
   }, [familyMembers]);
   
-  const notificationCount = useMemo(() => {
+ const notificationCount = useMemo(() => {
     const eventReminderDays = settings?.notificationSettings?.events?.daysBefore || 7;
-    const filteredEvents = upcomingEvents.filter(e => e.daysLeft <= eventReminderDays);
-    return upcomingTransactions.length + lowStockProducts.length + filteredEvents.length;
-  }, [upcomingTransactions, lowStockProducts, upcomingEvents, settings]);
+    
+    const isNew = (item: any) => {
+        if (!item || !item.createdAt || !(item.createdAt instanceof Date)) {
+            return false;
+        }
+        if (!lastSeenNotifications) return true; // If we've never seen notifications, they are all new
+        return item.createdAt > lastSeenNotifications;
+    };
+    
+    const newTransactions = upcomingTransactions.filter(isNew).length;
+    const newLowStock = lowStockProducts.filter(isNew).length;
+    const newEvents = upcomingEvents.filter(e => e.daysLeft <= eventReminderDays && isNew(e)).length;
+
+    return newTransactions + newLowStock + newEvents;
+  }, [upcomingTransactions, lowStockProducts, upcomingEvents, settings, lastSeenNotifications]);
 
 
   if (loading) {

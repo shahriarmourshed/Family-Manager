@@ -6,7 +6,7 @@ import { createContext, useContext, useState, useEffect, ReactNode, useCallback 
 import type { Expense, FamilyMember, Product, Income, ExpenseCategory, IncomeCategory, UserSettings, NotificationSettings } from '@/lib/types';
 import { useAuth } from './auth-context';
 import { db } from '@/lib/firebase';
-import { onSnapshot, collection, query, orderBy, writeBatch, getDocs, doc, deleteDoc } from "firebase/firestore";
+import { onSnapshot, collection, query, orderBy, writeBatch, getDocs, doc, deleteDoc, Timestamp } from "firebase/firestore";
 import {
   calculateAutoReducedStock,
   generateRecurrentTransactions,
@@ -65,6 +65,7 @@ const DEFAULT_SETTINGS: UserSettings = {
         events: { enabled: false, time: '11:00', daysBefore: 3 },
     },
     fcmTokens: [],
+    lastSeenNotifications: null,
 };
 
 
@@ -141,6 +142,15 @@ export function DataProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(`lastSeenNotifications_${userId}`, now.toISOString());
   }, [userId]);
 
+  const processDoc = (doc: any) => {
+    const data = doc.data();
+    // Convert Firestore Timestamps to JS Dates
+    if (data.createdAt && data.createdAt.toDate) {
+      data.createdAt = data.createdAt.toDate();
+    }
+    return { id: doc.id, ...data };
+  };
+
   // Fetch initial data and set up listeners
   useEffect(() => {
     if (!userId) {
@@ -163,7 +173,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         const collectionRef = collection(db, `users/${userId}/${collectionName}`);
         const q = query(collectionRef, orderBy('createdAt', 'desc'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            let data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            let data = snapshot.docs.map(processDoc);
 
              if (collectionName === 'incomes' || collectionName === 'expenses') {
                 const futureDate = new Date();
@@ -174,7 +184,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
             
             if (collectionName === 'expenseCategories') {
                 const customCategories = data;
-                const defaultCategories = DEFAULT_EXPENSE_CATEGORIES.map((cat, index) => ({ ...cat, id: `default-${index}` }));
+                const defaultCategories = DEFAULT_EXPENSE_CATEGORIES.map((cat, index) => ({ ...cat, id: `default-${index}`, createdAt: new Date(0) }));
                 const combined = [...defaultCategories, ...customCategories].sort((a, b) => a.name.localeCompare(b.name));
                 const unique = combined.filter((v, i, a) => a.findIndex(t => t.name === v.name) === i);
                 data = unique;
@@ -186,7 +196,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
                 }
             } else if (collectionName === 'incomeCategories') {
                 const customCategories = data;
-                const defaultCategories = DEFAULT_INCOME_CATEGORIES.map((cat, index) => ({ ...cat, id: `default-${index}` }));
+                const defaultCategories = DEFAULT_INCOME_CATEGORIES.map((cat, index) => ({ ...cat, id: `default-${index}`, createdAt: new Date(0) }));
                 const combined = [...defaultCategories, ...customCategories].sort((a, b) => a.name.localeCompare(b.name));
                 const unique = combined.filter((v, i, a) => a.findIndex(t => t.name === v.name) === i);
                 data = unique;
@@ -218,11 +228,21 @@ export function DataProvider({ children }: { children: ReactNode }) {
     setupSubscription('expenseCategories', setExpenseCategories);
     setupSubscription('incomeCategories', setIncomeCategories);
     
-    getSettings(userId).then(setSettings);
+    getSettings(userId).then(settings => {
+      const lastSeen = settings.lastSeenNotifications;
+      if(lastSeen && (lastSeen as any).toDate) {
+        settings.lastSeenNotifications = (lastSeen as any).toDate();
+      }
+      setSettings(settings)
+    });
     
     const settingsUnsub = onSnapshot(doc(db, 'users', userId, 'settings', 'main'), (doc) => {
         if(doc.exists()) {
             const remoteSettings = doc.data() as Partial<UserSettings>;
+             if(remoteSettings.lastSeenNotifications && (remoteSettings.lastSeenNotifications as any).toDate) {
+                remoteSettings.lastSeenNotifications = (remoteSettings.lastSeenNotifications as any).toDate();
+            }
+
             setSettings(prevSettings => {
                  const newSettings = {
                     ...DEFAULT_SETTINGS,

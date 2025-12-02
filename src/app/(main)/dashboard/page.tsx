@@ -185,17 +185,16 @@ export default function DashboardPage() {
     const eventReminderDays = settings?.notificationSettings?.events?.daysBefore || 7;
     
     const isNew = (item: any) => {
-        if (!item || !item.createdAt) return false;
-        
-        const itemDate = item.createdAt.toDate ? item.createdAt.toDate() : new Date(item.createdAt);
-        
-        if (!lastSeenNotifications) return true;
-        return itemDate > lastSeenNotifications;
+        if (!item || !item.createdAt || !(item.createdAt instanceof Date)) {
+            return false;
+        }
+        if (!lastSeenNotifications) return true; // If we've never seen notifications, they are all new
+        return item.createdAt > lastSeenNotifications;
     };
     
     const newTransactions = upcomingTransactions.filter(isNew).length;
     const newLowStock = lowStockProducts.filter(isNew).length;
-    const newEvents = upcomingEvents.filter(e => e.daysLeft <= eventReminderDays && isNew(e.member)).length;
+    const newEvents = upcomingEvents.filter(e => e.daysLeft <= eventReminderDays && isNew(e)).length;
 
     return newTransactions + newLowStock + newEvents;
   }, [upcomingTransactions, lowStockProducts, upcomingEvents, settings, lastSeenNotifications]);
