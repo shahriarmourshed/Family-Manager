@@ -16,6 +16,9 @@ try {
     
     const serviceAccount = JSON.parse(serviceAccountString);
 
+    // Correctly format the private key
+    serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+
     adminApp = admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });
